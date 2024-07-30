@@ -83,11 +83,16 @@ class PromptEncoder(nn.Module):
             padding_label = -torch.ones((labels.shape[0], 1), device=labels.device)
             points = torch.cat([points, padding_point], dim=1)
             labels = torch.cat([labels, padding_label], dim=1)
-        point_embedding = self.pe_layer.forward_with_coords(points, self.input_image_size)
-        point_embedding[labels == -1] = 0.0
-        point_embedding[labels == -1] += self.not_a_point_embed.weight
-        point_embedding[labels == 0] += self.point_embeddings[0].weight
-        point_embedding[labels == 1] += self.point_embeddings[1].weight
+        point_embedding = self.pe_layer.forward_with_coords(points, self.input_image_size) + self.point_embeddings[1].weight
+        # point_embedding += self.point_embeddings[1].weight
+        # point_embedding[labels == -1] = 0.0
+        # point_embedding[labels == -1] += self.not_a_point_embed.weight
+        # point_embedding[labels == 0] += self.point_embeddings[0].weight
+        # point_embedding[labels == 1] += self.point_embeddings[1].weight
+        # point_embedding[labels == -1] = self.not_a_point_embed.weight + point_embedding[labels == -1]
+        # point_embedding[labels == 0] = self.point_embeddings[0].weight + point_embedding[labels == 0]
+        # point_embedding[labels == 1] += self.point_embeddings[1].weight
+        # point_embedding = torch.zeros((1,1,256))
         return point_embedding
 
     def _embed_boxes(self, boxes: torch.Tensor) -> torch.Tensor:
@@ -190,6 +195,7 @@ class PositionEmbeddingRandom(nn.Module):
         coords = 2 * np.pi * coords
         # outputs d_1 x ... x d_n x C shape
         return torch.cat([torch.sin(coords), torch.cos(coords)], dim=-1)
+        # return torch.zeros((1, 3))
 
     def forward(self, size: Tuple[int, int]) -> torch.Tensor:
         """Generate positional encoding for a grid of the specified size."""
@@ -212,3 +218,4 @@ class PositionEmbeddingRandom(nn.Module):
         coords[:, :, 0] = coords[:, :, 0] / image_size[1]
         coords[:, :, 1] = coords[:, :, 1] / image_size[0]
         return self._pe_encoding(coords.to(torch.float))  # B x N x C
+        # return torch.zeros((1, 3))

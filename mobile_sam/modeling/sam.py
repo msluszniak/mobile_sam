@@ -4,6 +4,9 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import cv2
+import numpy as np
+
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -41,11 +44,44 @@ class Sam(nn.Module):
           pixel_std (list(float)): Std values for normalizing pixels in the input image.
         """
         super().__init__()
+        self.points = (
+            torch.Tensor([[[222, 444], [333, 555]]]),
+            torch.Tensor([[1, 1]]),
+        )
+
+        self.register_buffer("aergaergaeqrgae", self.points[0])
+        self.register_buffer("sefsdfsdfd", self.points[1])
+        # self.points1 = torch.Tensor([[[222, 444], [333, 555]]])
+        # self.points2 = torch.Tensor([[1, 1]])
+        # self.register_buffer("points", torch.Tensor(points), persistent=False)
         self.image_encoder = image_encoder
         self.prompt_encoder = prompt_encoder
         self.mask_decoder = mask_decoder
         self.register_buffer("pixel_mean", torch.Tensor(pixel_mean).view(-1, 1, 1), False)
         self.register_buffer("pixel_std", torch.Tensor(pixel_std).view(-1, 1, 1), False)
+        # IMAGE_PATH = './yin_yang.png'
+        # im = cv2.imread(IMAGE_PATH)
+        # img0 = im.copy()
+        # im = cv2.resize(im, (1024, 1024), interpolation = cv2.INTER_AREA)
+        # im = im.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
+        # im = np.ascontiguousarray(im)
+        # # Convert into torch
+        # im = torch.from_numpy(im)
+        # im = im.float()  # uint8 to fp16/32
+        # im /= 255  # 0 - 255 to 0.0 - 1.0
+        # #test
+        # # im = torch.ones((3, 1024, 1024), dtype=torch.float32)
+        # self.batched_input = [
+        #     # NOTE: SAM can take any of the following inputs independently. For
+        #     # example, if you want to gen an inference model with point-only inputs,
+        #     # just comment out the other inputs.
+        #     {  # multi-points input
+        #        "image": im,
+        #        "original_size": (1024, 1024),
+        #        "point_coords": torch.Tensor([[[222, 444], [333, 555]]]),
+        #        "point_labels": torch.Tensor([[1, 1]]),
+        #     },
+        # ]
 
     @property
     def device(self) -> Any:
@@ -54,9 +90,10 @@ class Sam(nn.Module):
     @torch.no_grad()
     def forward(
         self,
-        batched_input: List[Dict[str, Any]],
-        multimask_output: bool,
-    ) -> List[Dict[str, torch.Tensor]]:
+        # batched_input: List[Dict[str, Any]],
+        # multimask_output: bool,
+        input_images
+    ) -> torch.Tensor:#-> List[Dict[str, torch.Tensor]]:
         """
         Predicts masks end-to-end from provided images and prompts.
         If prompts are not known in advance, using SamPredictor is
@@ -95,41 +132,55 @@ class Sam(nn.Module):
                 shape BxCxHxW, where H=W=256. Can be passed as mask input
                 to subsequent iterations of prediction.
         """
-        input_images = torch.stack([self.preprocess(x["image"]) for x in batched_input], dim=0)
+        # input_images = torch.stack([self.preprocess(x["image"]) for x in self.batched_input], dim=0)
+        # input_images = torch.stack([self.preprocess(x["image"]) for x in batched_input], dim=0)
         image_embeddings = self.image_encoder(input_images)
 
-        outputs = []
-        for image_record, curr_embedding in zip(batched_input, image_embeddings):
-            if "point_coords" in image_record:
-                points = (image_record["point_coords"], image_record["point_labels"])
-            else:
-                points = None
-            sparse_embeddings, dense_embeddings = self.prompt_encoder(
-                points=points,
-                boxes=image_record.get("boxes", None),
-                masks=image_record.get("mask_inputs", None),
-            )
-            low_res_masks, iou_predictions = self.mask_decoder(
-                image_embeddings=curr_embedding.unsqueeze(0),
-                image_pe=self.prompt_encoder.get_dense_pe(),
-                sparse_prompt_embeddings=sparse_embeddings,
-                dense_prompt_embeddings=dense_embeddings,
-                multimask_output=multimask_output,
-            )
-            masks = self.postprocess_masks(
-                low_res_masks,
-                input_size=image_record["image"].shape[-2:],
-                original_size=image_record["original_size"],
-            )
-            masks = masks > self.mask_threshold
-            outputs.append(
-                {
-                    "masks": masks,
-                    "iou_predictions": iou_predictions,
-                    "low_res_logits": low_res_masks,
-                }
-            )
-        return outputs
+        # outputs = []
+        # for image_record, curr_embedding in zip(batched_input, image_embeddings):
+        # if "point_coords" in image_record:
+            # points = (image_record["point_coords"], image_record["point_labels"])
+        points = self.points
+        # else:
+        #     points = None
+        sparse_embeddings, dense_embeddings = self.prompt_encoder(
+            points=points,
+            # boxes=image_record.get("boxes", None),
+            # masks=image_record.get("mask_inputs", None),
+            boxes = None,
+            masks = None,
+        )
+        low_res_masks, iou_predictions = self.mask_decoder(
+            # image_embeddings=curr_embedding.unsqueeze(0),
+            image_embeddings=image_embeddings[0].unsqueeze(0),
+            image_pe=self.prompt_encoder.get_dense_pe(),
+            sparse_prompt_embeddings=sparse_embeddings,
+            dense_prompt_embeddings=dense_embeddings,
+            # multimask_output=multimask_output,
+            multimask_output=False,
+        )
+        # masks = self.postprocess_masks(
+        #     low_res_masks,
+        #     input_size=image_record["image"].shape[-2:],
+        #     original_size=image_record["original_size"],
+        # )
+        masks = self.postprocess_masks(
+            low_res_masks,
+            # input_size=image_record["image"].shape[-2:],
+            input_size=input_images.shape[-2:],
+            original_size=(1024, 1024),
+        )
+        masks = masks > self.mask_threshold
+        # outputs.append(
+        #     {
+        #         "masks": masks,
+        #         "iou_predictions": iou_predictions,
+        #         "low_res_logits": low_res_masks,
+        #     }
+        # )
+        return masks
+
+        # return outputs
 
     def postprocess_masks(
         self,
@@ -158,7 +209,7 @@ class Sam(nn.Module):
             mode="bilinear",
             align_corners=False,
         )
-        masks = masks[..., : input_size[0], : input_size[1]]
+        # masks = masks[..., : input_size[0], : input_size[1]]
         masks = F.interpolate(masks, original_size, mode="bilinear", align_corners=False)
         return masks
 
