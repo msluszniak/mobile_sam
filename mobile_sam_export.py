@@ -118,7 +118,8 @@ with torch.no_grad():
     model = SegmentAnythingModel()
     og_model = model.get_eager_model()
     inputs = model.get_example_inputs()
-    model_inputs = inputs[0][0]['image'].unsqueeze(0)
+    model_inputs = (inputs[0][0]['image'].unsqueeze(0), inputs[0][0]['point_coords'], inputs[0][0]['point_labels'])
+    # print(inputs[0][0]['point_coords'].shape)
     og_model.eval()
 
     model_name = "mobile_sam_vit"
@@ -181,7 +182,7 @@ with torch.no_grad():
     #     plt.axis('off')
     #     plt.show()
     #     plt.show() 
-    prog = export(og_model, (model_inputs, ))
+    prog = export(og_model, model_inputs)
     # prog = export(og_model, tuple())
     edge = to_edge(prog, compile_config=EdgeCompileConfig(_check_ir_validity=False, _skip_dim_order=True),)
     print(edge.exported_program())
@@ -206,8 +207,8 @@ with torch.no_grad():
     # etrecord_path = "etrecord.bin"
     # generate_etrecord(etrecord_path, edge_manager_copy, exec_prog)
 
-    # with open("mobile_sam_app.pte", "wb") as file:
-    #     exec_prog.write_to_file(file)
+    with open("mobile_sam_app.pte", "wb") as file:
+        exec_prog.write_to_file(file)
 
     # prog = export_to_exec_prog(og_model, inputs, edge_compile_config=EdgeCompileConfig(_check_ir_validity=False), backend_config = XnnpackPartitioner(),)
     # prog.to_backend()

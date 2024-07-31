@@ -17,10 +17,16 @@ from .tiny_vit_sam import TinyViT
 from .image_encoder import ImageEncoderViT
 from .mask_decoder import MaskDecoder
 from .prompt_encoder import PromptEncoder
+# from kornia.filters import box_blur
+from torchvision.transforms.functional import gaussian_blur
+from torch.nn.functional import conv2d
+from cv2 import blur
 
 
 class Sam(nn.Module):
     mask_threshold: float = 0.0
+    # mask_threshold: float = -0.3
+    # mask_threshold: float = 0.3
     image_format: str = "RGB"
 
     def __init__(
@@ -28,8 +34,8 @@ class Sam(nn.Module):
         image_encoder: Union[ImageEncoderViT, TinyViT],
         prompt_encoder: PromptEncoder,
         mask_decoder: MaskDecoder,
-        pixel_mean: List[float] = [123.675, 116.28, 103.53],
-        pixel_std: List[float] = [58.395, 57.12, 57.375],
+        pixel_mean: List[float] = [123.675 / 255, 116.28 / 255, 103.53 / 255],
+        pixel_std: List[float] = [58.395 / 255, 57.12 / 255, 57.375 / 255],
     ) -> None:
         """
         SAM predicts object masks from an image and input prompts.
@@ -44,13 +50,13 @@ class Sam(nn.Module):
           pixel_std (list(float)): Std values for normalizing pixels in the input image.
         """
         super().__init__()
-        self.points = (
-            torch.Tensor([[[222, 444], [333, 555]]]),
-            torch.Tensor([[1, 1]]),
-        )
+        # self.points = (
+        #     torch.Tensor([[[222, 444], [333, 555]]]),
+        #     torch.Tensor([[1, 1]]),
+        # )
 
-        self.register_buffer("aergaergaeqrgae", self.points[0])
-        self.register_buffer("sefsdfsdfd", self.points[1])
+        # self.register_buffer("aergaergaeqrgae", self.points[0])
+        # self.register_buffer("sefsdfsdfd", self.points[1])
         # self.points1 = torch.Tensor([[[222, 444], [333, 555]]])
         # self.points2 = torch.Tensor([[1, 1]])
         # self.register_buffer("points", torch.Tensor(points), persistent=False)
@@ -59,6 +65,7 @@ class Sam(nn.Module):
         self.mask_decoder = mask_decoder
         self.register_buffer("pixel_mean", torch.Tensor(pixel_mean).view(-1, 1, 1), False)
         self.register_buffer("pixel_std", torch.Tensor(pixel_std).view(-1, 1, 1), False)
+        self.softmax = torch.nn.Softmax()
         # IMAGE_PATH = './yin_yang.png'
         # im = cv2.imread(IMAGE_PATH)
         # img0 = im.copy()
@@ -92,7 +99,9 @@ class Sam(nn.Module):
         self,
         # batched_input: List[Dict[str, Any]],
         # multimask_output: bool,
-        input_images
+        input_images,
+        points,
+        labels,
     ) -> torch.Tensor:#-> List[Dict[str, torch.Tensor]]:
         """
         Predicts masks end-to-end from provided images and prompts.
@@ -134,17 +143,18 @@ class Sam(nn.Module):
         """
         # input_images = torch.stack([self.preprocess(x["image"]) for x in self.batched_input], dim=0)
         # input_images = torch.stack([self.preprocess(x["image"]) for x in batched_input], dim=0)
+        # input_images = self.preprocess(input_images)
         image_embeddings = self.image_encoder(input_images)
 
         # outputs = []
         # for image_record, curr_embedding in zip(batched_input, image_embeddings):
         # if "point_coords" in image_record:
             # points = (image_record["point_coords"], image_record["point_labels"])
-        points = self.points
+        # points = self.points
         # else:
         #     points = None
         sparse_embeddings, dense_embeddings = self.prompt_encoder(
-            points=points,
+            points=(points, labels),
             # boxes=image_record.get("boxes", None),
             # masks=image_record.get("mask_inputs", None),
             boxes = None,
@@ -157,7 +167,7 @@ class Sam(nn.Module):
             sparse_prompt_embeddings=sparse_embeddings,
             dense_prompt_embeddings=dense_embeddings,
             # multimask_output=multimask_output,
-            multimask_output=False,
+            multimask_output=True,
         )
         # masks = self.postprocess_masks(
         #     low_res_masks,
@@ -170,7 +180,18 @@ class Sam(nn.Module):
             input_size=input_images.shape[-2:],
             original_size=(1024, 1024),
         )
+
+        # masks = self.softmax(masks)
+        # masks = conv2d(masks[:, 0, :, :].unsqueeze(1), torch.ones((1, 1, 15, 15)), padding='same') / 225
         masks = masks > self.mask_threshold
+        # masks = masks[:, 0, :, :].unsqueeze(1)
+        # # print(masks.numpy().astype(np.int8).shape)
+        # masks = blur(masks.numpy().astype(np.uint8).squeeze(), (5, 5))
+        # masks = masks[np.newaxis, np.newaxis, ...]
+
+
+        # masks = gaussian_blur(masks[:, 0, :, :], [3, 3])
+
         # outputs.append(
         #     {
         #         "masks": masks,
@@ -178,6 +199,9 @@ class Sam(nn.Module):
         #         "low_res_logits": low_res_masks,
         #     }
         # )
+        # masks = masks[:, 0, :, :]
+        # masks = masks[:, np.newaxis, ...]
+        masks = masks.float()
         return masks
 
         # return outputs
