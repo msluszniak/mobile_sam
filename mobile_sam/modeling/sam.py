@@ -21,10 +21,13 @@ from .prompt_encoder import PromptEncoder
 from torchvision.transforms.functional import gaussian_blur
 from torch.nn.functional import conv2d
 from cv2 import blur
+from kornia.morphology import closing, dilation, erosion
+
 
 
 class Sam(nn.Module):
     mask_threshold: float = 0.0
+    # mask_threshold: float = 0.3
     # mask_threshold: float = -0.3
     # mask_threshold: float = 0.3
     image_format: str = "RGB"
@@ -144,6 +147,7 @@ class Sam(nn.Module):
         # input_images = torch.stack([self.preprocess(x["image"]) for x in self.batched_input], dim=0)
         # input_images = torch.stack([self.preprocess(x["image"]) for x in batched_input], dim=0)
         # input_images = self.preprocess(input_images)
+
         image_embeddings = self.image_encoder(input_images)
 
         # outputs = []
@@ -153,6 +157,8 @@ class Sam(nn.Module):
         # points = self.points
         # else:
         #     points = None
+
+
         sparse_embeddings, dense_embeddings = self.prompt_encoder(
             points=(points, labels),
             # boxes=image_record.get("boxes", None),
@@ -160,6 +166,8 @@ class Sam(nn.Module):
             boxes = None,
             masks = None,
         )
+
+
         low_res_masks, iou_predictions = self.mask_decoder(
             # image_embeddings=curr_embedding.unsqueeze(0),
             image_embeddings=image_embeddings[0].unsqueeze(0),
@@ -169,11 +177,13 @@ class Sam(nn.Module):
             # multimask_output=multimask_output,
             multimask_output=True,
         )
+
         # masks = self.postprocess_masks(
         #     low_res_masks,
         #     input_size=image_record["image"].shape[-2:],
         #     original_size=image_record["original_size"],
         # )
+
         masks = self.postprocess_masks(
             low_res_masks,
             # input_size=image_record["image"].shape[-2:],
@@ -183,14 +193,26 @@ class Sam(nn.Module):
 
         # masks = self.softmax(masks)
         # masks = conv2d(masks[:, 0, :, :].unsqueeze(1), torch.ones((1, 1, 15, 15)), padding='same') / 225
+        # return torch.where(masks > self.mask_threshold, 1.0, 0.0)
+
         masks = masks > self.mask_threshold
+        
+        # masks = masks.float()
         # masks = masks[:, 0, :, :].unsqueeze(1)
         # # print(masks.numpy().astype(np.int8).shape)
         # masks = blur(masks.numpy().astype(np.uint8).squeeze(), (5, 5))
         # masks = masks[np.newaxis, np.newaxis, ...]
 
 
-        # masks = gaussian_blur(masks[:, 0, :, :], [3, 3])
+        # masks = gaussian_blur(masks[:, 0, :, :], [5, 5])
+        # masks = masks[None, ...]
+
+        # print(masks.shape)
+        # kernel = torch.ones(5, 5)
+        # masks = closing(masks[:, 0, :, :].unsqueeze(1), kernel)
+        # masks = dilation(masks[:, 0, :, :].unsqueeze(1), kernel)
+
+
 
         # outputs.append(
         #     {
@@ -201,7 +223,7 @@ class Sam(nn.Module):
         # )
         # masks = masks[:, 0, :, :]
         # masks = masks[:, np.newaxis, ...]
-        masks = masks.float()
+        # masks = masks.float()
         return masks
 
         # return outputs

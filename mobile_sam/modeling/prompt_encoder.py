@@ -87,11 +87,15 @@ class PromptEncoder(nn.Module):
         # point_embedding += self.point_embeddings[1].weight
         # point_embedding[labels == -1] = 0.0
         # point_embedding[labels == -1] += self.not_a_point_embed.weight
+
         # point_embedding[labels == 0] += self.point_embeddings[0].weight
         # point_embedding[labels == 1] += self.point_embeddings[1].weight
         # point_embedding[labels == -1] = self.not_a_point_embed.weight + point_embedding[labels == -1]
-        # point_embedding[labels == 0] = self.point_embeddings[0].weight + point_embedding[labels == 0]
+
+
+        # point_embedding[labels == 0] += self.point_embeddings[0].weight
         # point_embedding[labels == 1] += self.point_embeddings[1].weight
+
         # point_embedding = torch.zeros((1,1,256))
         return point_embedding
 
